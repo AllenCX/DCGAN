@@ -37,37 +37,41 @@ class DCGAN(object):
                 return tf.nn.relu(bn)
             else:
                 return bn
-        
+    
+    def generator(self, input, reuse=False, is_training=False):
+        with tf.variable_scope("generator") as scope:
+            if reuse:
+                scope.reuse_variable()
+            g_0 = tf.cast(
+                tf.contrib.layers.fully_connected(input, 7 * 7 * 64, 
+                                                  activation_fn=None, 
+                                                  scope="G_linear"), 
+                dtype=tf.float32)
+            g_0 = tf.contrib.layers.batch_norm(g_0, is_training=is_training, scope="G_bn_0")
+            g_0 = tf.nn.relu(g_0)
+            g_1 = tf.cast(tf.reshape(g_0, shape=[-1, 7, 7, 64]), dtype=tf.float32)
+            g_2 = self._G_conv_transpose_bn(g_1, 32, 5, 2, is_training=is_training, name="G_conv_trans_1")
+            g_3 = self._G_conv_transpose_bn(g_2, 16, 5, 1, is_training=is_training, name="G_conv_trans_2")
+            g_4 = self._G_conv_transpose_bn(g_3, 8, 5, 2, is_training=is_training, name="G_conv_trans_3")
+            g_5 = tf.contrib.layers.conv2d_transpose(g_4, 1, 5, 1, 'SAME', activation_fn=tf.nn.tanh, scope="G_conv_trans_4")
+            return g_5
+    
     def discriminator(self, input, y=None, reuse=False, is_training=False):
         # LeNet-like discriminator
         with tf.variable_scope("discriminator") as scope:
             if reuse:
                 scope.reuse_variables()
             # d_0 = tf.contrib.layers.batch_norm(input, is_training=is_training, activation_fn=None, scope="input")
-            d_1 = self._D_conv2d_bn(input, 8, 3, 2, is_training, name="D_conv1") # => [None, 14, 14, 8]
-            d_2 = self._D_conv2d_bn(d_1, 16, 3, 1, is_training, name="D_conv2")  # => [None, 14, 14, 16]
-            d_3 = self._D_conv2d_bn(d_2, 32, 3, 2, is_training, name="D_conv3")  # => [None, 7, 7, 32]
-            d_4 = self._D_conv2d_bn(d_3, 64, 3, 1, is_training, name="D_conv4")  # => [None, 7, 7, 64]
+            d_1 = self._D_conv2d_bn(input, 4, 5, 1, is_training, name="D_conv1") # => [None, 14, 14, 8]
+            #d_1 = tf.contrib.layers.conv2d(input, 4, 5, 2, activation_fn=tf.nn.relu, scope="D_conv1")
+            d_2 = self._D_conv2d_bn(d_1, 8, 5, 2, is_training, name="D_conv2")  # => [None, 14, 14, 16]
+            d_3 = self._D_conv2d_bn(d_2, 32, 5, 2, is_training, name="D_conv3")  # => [None, 7, 7, 32]
+            d_4 = self._D_conv2d_bn(d_3, 64, 5, 1, is_training, name="D_conv4")  # => [None, 7, 7, 64]
             d_5 = tf.contrib.layers.flatten(d_4)
             d_6 = tf.contrib.layers.fully_connected(d_5, num_outputs=1, activation_fn=None, scope="D_linear")
             return tf.nn.sigmoid(d_6, name="D_output"), d_6
         
-    def generator(self, input, reuse=False, is_training=False):
-        with tf.variable_scope("generator") as scope:
-            if reuse:
-                scope.reuse_variable()
-            g_0 = tf.cast(
-                tf.contrib.layers.fully_connected(input, 7 * 7 * 128, 
-                                                  activation_fn=None, 
-                                                  scope="G_linear"), 
-                dtype=tf.float32)
-            # => [None, 4 * 4 * 1024]
-            g_1 = tf.cast(tf.reshape(g_0, shape=[-1, 7, 7, 128]), dtype=tf.float32)
-            g_2 = self._G_conv_transpose_bn(g_1, 64, 3, 2, is_training=is_training, name="G_conv_trans_1")
-            g_3 = self._G_conv_transpose_bn(g_2, 32, 3, 1, is_training=is_training, name="G_conv_trans_2")
-            g_4 = self._G_conv_transpose_bn(g_3, 16, 3, 2, is_training=is_training, name="G_conv_trans_3")
-            g_5 = tf.contrib.layers.conv2d_transpose(g_4, 1, 3, 1, 'SAME', activation_fn=tf.nn.tanh, scope="G_conv_trans_4")
-            return g_5
+    
             
     def build(self, config):
         print("Building model...")
@@ -121,28 +125,28 @@ class DCGAN(object):
         self.train_summary_writer = tf.summary.FileWriter(config.summary_dir + "/train", self.sess.graph)
         self.test_summary_writer = tf.summary.FileWriter(config.summary_dir + "/test")
         
-    def train(self, config):
-        self.build(config)
-        self.saver = tf.train.Saver()
-        #sess = self.sess
-        print("Starting training...")
-        print("Model will be saved per %d epochs" %config.save_per_epoch)
-        self.D_global_step = tf.Variable(0)
-        self.G_global_step = tf.Variable(0)
-        with tf.control_dependencies(self.D_update_ops):
-            D_opt = tf.train.AdamOptimizer(learning_rate=config.lr, beta1=config.beta1) \
-                            .minimize(self.D_loss, var_list=self.D_trainable_vars, global_step=self.D_global_step)
-        with tf.control_dependencies(self.G_update_ops):
-            G_opt = tf.train.AdamOptimizer(learning_rate=config.lr, beta1=config.beta1) \
-                            .minimize(self.G_loss, var_list=self.G_trainable_vars, global_step=self.G_global_step)
-        
-        noise = np.random.uniform(-1, 1, [config.batch_size, config.latent_size])
-        
-        self.sess.run(tf.global_variables_initializer())
-        
+    def train(self, config, is_continue=False):
+        if is_continue == False:
+            
+            self.build(config)
+            self.saver = tf.train.Saver()
+            #sess = self.sess
+            print("Starting training...")
+            print("Model will be saved per %d epochs" %config.save_per_epoch)
+            self.D_global_step = tf.Variable(0)
+            self.G_global_step = tf.Variable(0)
+            with tf.control_dependencies(self.D_update_ops):
+                D_opt = tf.train.AdamOptimizer(learning_rate=config.lr, beta1=config.beta1) \
+                                .minimize(self.D_loss, var_list=self.D_trainable_vars, global_step=self.D_global_step)
+            with tf.control_dependencies(self.G_update_ops):
+                G_opt = tf.train.AdamOptimizer(learning_rate=config.lr, beta1=config.beta1) \
+                                .minimize(self.G_loss, var_list=self.G_trainable_vars, global_step=self.G_global_step)
+            self.sess.run(tf.global_variables_initializer())
+            
         for epoch in range(config.epoch_num):
             batch_ix = 0
             for X_batch, y_batch in self.minibatches(self.X, self.y, config.batch_size, True):
+                noise = np.random.uniform(-1, 1, [config.batch_size, config.latent_size])
                 feed_dict = {
                     self.real_image: X_batch.astype(np.float32), 
                     self.noise: noise,
@@ -176,7 +180,7 @@ class DCGAN(object):
         print("Training finished!")    
     def generate(self, num):
         #sess = self.sess
-        noise = np.random.uniform(-1, 1, [num, self.config.latent_size])
+        noise = np.random.uniform(-1, 1, [num, config.latent_size])
         fake_image = self.sess.run(self.fake_image,
                              feed_dict={
                                  self.noise: noise,
