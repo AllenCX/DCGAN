@@ -1,12 +1,12 @@
 import tensorflow as tf
 import numpy as np
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import time
 import sys 
 import os
 from config import Config
 from DCGAN_MNIST import DCGAN
-from scipy.misc import imsave
+#from scipy.misc import imsave
 if __name__ == "__main__":
 	NUM_GENERATED = 9
 
