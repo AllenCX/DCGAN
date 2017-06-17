@@ -1,11 +1,12 @@
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import time
 import sys 
 import os
 from config import Config
-from DCGAN import DCGAN
+from DCGAN_MNIST import DCGAN
+from scipy.misc import imsave
 if __name__ == "__main__":
 	NUM_GENERATED = 9
 
@@ -30,7 +31,13 @@ if __name__ == "__main__":
 	f, axarr = plt.subplots(tmp, tmp, figsize=(5, 5))
 	
 	for i in range(tmp):
-	    for j in range(tmp):
-	        axarr[i, j].imshow(generated_images[i*tmp + j], cmap='Greys', interpolation='nearest')
-
+		for j in range(tmp):
+			axarr[i, j].imshow(generated_images[i*tmp + j], cmap='Greys', interpolation='nearest')
+			
 	f.savefig("output.png")
+	'''image_out = np.zeros((28 * 3, 28 * 3))
+				for i in range(tmp):
+					for j in range(tmp):
+						image_out[i*28:(i+1)*28, j*28:(j+1)*28] = generated_images[i*tmp + j]
+			
+				imsave("res.png"%i, image_out)'''
