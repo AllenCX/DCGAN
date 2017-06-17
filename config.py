@@ -1,5 +1,5 @@
 class Config(object):
-    def __init__(self, batch_size, latent_size, lr, beta1, epoch_num, alpha):
+    def __init__(self, batch_size, latent_size, lr, beta1, epoch_num, alpha, save_per_epoch):
         self.batch_size = batch_size
         self.latent_size = latent_size
         self.epoch_num = epoch_num
@@ -8,3 +8,4 @@ class Config(object):
         self.beta1 = beta1
         self.summary_dir = "summary"
         #self.is_training = True
+        self.save_per_epoch = save_per_epoch
